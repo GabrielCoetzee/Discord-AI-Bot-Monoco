@@ -1,0 +1,18 @@
+{
+  "profiles": {
+    "myFriend": {
+      "displayName": "My Friend",
+      "games": [
+        "Counter-Strike 2",
+        "Dota 2",
+        "Half-Life 2",
+        "Portal 2",
+        "Team Fortress 2"
+      ],
+      "wishlist": [
+        "Hollow Knight: Silksong",
+        "Hades II"
+      ]
+    }
+  }
+}
