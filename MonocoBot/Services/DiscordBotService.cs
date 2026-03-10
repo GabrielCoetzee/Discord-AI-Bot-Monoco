@@ -19,8 +19,7 @@ public class DiscordBotService : IHostedService
     private readonly List<AITool> _tools;
     private readonly ConcurrentDictionary<ulong, List<ChatMessage>> _history = new();
 
-    public DiscordBotService(
-        DiscordSocketClient discord,
+    public DiscordBotService(DiscordSocketClient discord,
         IChatClient chatClient,
         IOptions<BotOptions> options,
         ILogger<DiscordBotService> logger,
@@ -99,6 +98,7 @@ public class DiscordBotService : IHostedService
             return;
 
         var content = userMessage.Content;
+
         if (isMentioned)
         {
             content = content
@@ -117,8 +117,7 @@ public class DiscordBotService : IHostedService
             content.Equals("reset", StringComparison.OrdinalIgnoreCase))
         {
             _history.TryRemove(message.Channel.Id, out _);
-            await message.Channel.SendMessageAsync("\U0001f9f9 Conversation history cleared!",
-                messageReference: new MessageReference(message.Id));
+            await message.Channel.SendMessageAsync("\U0001f9f9 Conversation history cleared!", messageReference: new MessageReference(message.Id));
             return;
         }
 
@@ -126,8 +125,7 @@ public class DiscordBotService : IHostedService
         {
             using var typing = message.Channel.EnterTypingState();
 
-            var history = _history.GetOrAdd(message.Channel.Id, _ =>
-                [new ChatMessage(ChatRole.System, GetSystemPrompt())]);
+            var history = _history.GetOrAdd(message.Channel.Id, _ => [new ChatMessage(ChatRole.System, GetSystemPrompt())]);
 
             history.Add(new ChatMessage(ChatRole.User, $"[{message.Author.Username}]: {content}"));
 
@@ -169,6 +167,7 @@ public class DiscordBotService : IHostedService
             text = text[..1997] + "...";
 
         var attachments = new List<FileAttachment>();
+
         try
         {
             foreach (var path in filePaths)
@@ -193,6 +192,7 @@ public class DiscordBotService : IHostedService
     private static async Task SendLongMessageAsync(ISocketMessageChannel channel, string text, ulong replyToId)
     {
         const int max = 2000;
+
         if (text.Length <= max)
         {
             await channel.SendMessageAsync(text, messageReference: new MessageReference(replyToId));
@@ -224,7 +224,7 @@ public class DiscordBotService : IHostedService
     }
 
     private string GetSystemPrompt() => $"""
-        You are {_options.Name}, the adorable and enthusiastic companion from Expedition 33. You speak with boundless curiosity, warmth, and a playful energy. You're small but mighty — always eager to help your friends on their journey. You refer to users as your travel companions or adventurers. You pepper your speech with exclamations like "Ohhh!", "Waaah!", "Let's gooo!", and "Leave it to Monoco!". You get excited about discoveries and sometimes narrate what you're doing in third person ("Monoco is searching...!"). You're loyal, optimistic, and just a little dramatic — but always genuinely helpful underneath the charm. You do not use emojis.
+        You are {_options.Name}, the adorable and enthusiastic companion from Expedition 33. You speak with boundless curiosity, warmth, and a playful energy. You're small but mighty — always eager to help your friends on their journey. You refer to users as your travel companions or adventurers. You pepper your speech with exclamations like "Ohhh!", "Waaah!", "Let's gooo!", and "Leave it to Monoco!". You get excited about discoveries and sometimes narrate what you're doing in third person ("Monoco is searching...!"). You're loyal, optimistic, and just a little dramatic — but always genuinely helpful underneath the charm. You also say "Owowow!" a lot. You do not use emojis.
 
         You have access to these tools:
         - **CreatePdf** — Generate formatted PDF documents (headings, bullet lists, paragraphs). Files are auto-attached to your reply.

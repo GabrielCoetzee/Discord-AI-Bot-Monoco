@@ -84,6 +84,7 @@ public class PdfTools
         }).GeneratePdf(filePath);
 
         ToolOutput.AddFile(filePath);
+
         return $"PDF document '{title}' has been created and will be attached to the message.";
     }
 

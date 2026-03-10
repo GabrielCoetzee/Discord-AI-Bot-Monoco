@@ -23,7 +23,6 @@ public class WebSearchTools
         {
             var encoded = WebUtility.UrlEncode(query);
 
-            // Try the instant answer API first for a quick summary
             var instantUrl = $"https://api.duckduckgo.com/?q={encoded}&format=json&no_html=1";
             var instantRequest = new HttpRequestMessage(HttpMethod.Get, instantUrl);
             instantRequest.Headers.Add("User-Agent", "MonocoBot/1.0");
@@ -50,7 +49,6 @@ public class WebSearchTools
                 }
             }
 
-            // Also scrape the lite search page for more results
             var liteUrl = $"https://lite.duckduckgo.com/lite?q={encoded}";
             var liteRequest = new HttpRequestMessage(HttpMethod.Get, liteUrl);
             liteRequest.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");

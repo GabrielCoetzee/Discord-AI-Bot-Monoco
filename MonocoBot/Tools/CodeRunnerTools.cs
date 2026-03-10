@@ -10,8 +10,7 @@ public class CodeRunnerTools
         "Available namespaces: System, System.Linq, System.Collections.Generic, System.Text, System.IO, System.Text.Json, System.Net.Http. " +
         "The value of the last expression is returned. Console.WriteLine also works. " +
         "Has a 30-second timeout for safety.")]
-    public async Task<string> RunCSharpCode(
-        [Description("The C# code to execute. The last expression value is returned. Example: 'Enumerable.Range(1, 10).Sum()'")] string code)
+    public async Task<string> RunCSharpCode([Description("The C# code to execute. The last expression value is returned. Example: 'Enumerable.Range(1, 10).Sum()'")] string code)
     {
         try
         {
@@ -42,8 +41,10 @@ public class CodeRunnerTools
                 var consoleOutput = output.ToString();
 
                 var response = "";
+
                 if (!string.IsNullOrEmpty(consoleOutput))
                     response += $"Console Output:\n{consoleOutput}\n";
+
                 if (result is not null)
                     response += $"Result: {result}";
 

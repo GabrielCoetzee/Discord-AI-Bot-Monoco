@@ -12,8 +12,6 @@ public class SteamTools
         _httpClient = httpClient;
     }
 
-    // ── Tool Methods ────────────────────────────────────────────────────
-
     [Description("Extracts a numeric 64-bit Steam ID from a Steam profile URL. " +
         "Accepts a full profile URL (e.g. 'steamcommunity.com/profiles/76561198012345678') or a raw 64-bit ID. " +
         "Note: vanity name resolution (e.g. 'steamcommunity.com/id/gaben') is not supported — " +
@@ -56,8 +54,7 @@ public class SteamTools
     [Description("Gets a Steam user's public wishlist. " +
         "Only works if the wishlist is set to Public in Steam privacy settings. " +
         "If not accessible, try GetLocalProfileData to check the local profiles file instead.")]
-    public async Task<string> GetWishlist(
-        [Description("The Steam 64-bit ID")] string steamId)
+    public async Task<string> GetWishlist([Description("The Steam 64-bit ID")] string steamId)
     {
         try
         {
@@ -184,8 +181,7 @@ public class SteamTools
 
     [Description("Looks up pricing, deals, and sale information for a specific game by searching across multiple stores. " +
         "Use this to find current prices, discounts, or where a game is cheapest.")]
-    public async Task<string> LookupGameDeals(
-        [Description("The name of the game to look up deals for")] string gameName)
+    public async Task<string> LookupGameDeals([Description("The name of the game to look up deals for")] string gameName)
     {
         try
         {
