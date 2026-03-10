@@ -1,4 +1,4 @@
-# MonocoBot 🤖
+# Monoco - Discord - Bot 🤖
 
 MonocoBot is an AI-powered Discord bot built with .NET 10. It uses large language models (OpenAI, Azure OpenAI, or Ollama) combined with [Microsoft Semantic Kernel](https://github.com/microsoft/semantic-kernel) to provide a conversational assistant with tool-calling capabilities — all wrapped in the charming personality of **Monoco**, the adorable companion from *Expedition 33*.
 
