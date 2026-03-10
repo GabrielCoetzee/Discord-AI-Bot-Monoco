@@ -1,7 +1,7 @@
 {
   "profiles": {
-    "myFriend": {
-      "displayName": "My Friend",
+    "Venom": {
+      "displayName": "Venom",
       "games": [
         "Counter-Strike 2",
         "Dota 2",
@@ -10,8 +10,10 @@
         "Team Fortress 2"
       ],
       "wishlist": [
-        "Hollow Knight: Silksong",
-        "Hades II"
+        "The Outer Worlds 2"
+      ],
+      "recentlyPlayed": [
+        "Counter-Strike 2"
       ]
     }
   }

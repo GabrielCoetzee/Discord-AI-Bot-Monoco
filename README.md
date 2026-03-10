@@ -8,7 +8,8 @@ Mention the bot or DM it and it will respond with context-aware, multi-turn conv
 
 - **Multi-provider AI** — Supports OpenAI, Azure OpenAI (Azure AI Foundry), and local Ollama models.
 - **Conversational memory** — Maintains per-channel conversation history with configurable limits. Say `clear` or `reset` to start fresh.
-- **Steam integration** — Look up game libraries, wishlists, friends lists, and resolve vanity URLs via the Steam Web API. Users can register personal API keys to access private profiles.
+- **Steam integration** — Look up public Steam profiles, game libraries, wishlists, and recently played games via the Steam Web API. For private profiles, a local `steam_profiles.json` fallback provides manually-configured data.
+- **Game deal lookups** — Search for current prices and deals for any game across stores (powered by CheapShark).
 - **PDF generation** — Create formatted PDF documents (headings, bullet lists, paragraphs) using QuestPDF. Files are automatically attached to the reply.
 - **C# code execution** — Run C# snippets in a sandboxed Roslyn scripting environment with a 30-second timeout.
 - **Web search & page reading** — Search the web via DuckDuckGo and fetch the text content of any public URL.
@@ -23,7 +24,7 @@ Mention the bot or DM it and it will respond with context-aware, multi-turn conv
   - [OpenAI API key](https://platform.openai.com/account/api-keys)
   - [Azure OpenAI](https://learn.microsoft.com/azure/ai-services/openai/) endpoint + key
   - A running [Ollama](https://ollama.com/) instance (no key required)
-- *(Optional)* A [Steam Web API key](https://steamcommunity.com/dev/apikey) for Steam features
+- *(Optional)* Steam profile URLs for wishlist lookups (must be public)
 
 ## Configuration
 
@@ -40,7 +41,6 @@ The bot reads settings from `appsettings.json` and supports [.NET User Secrets](
     "AiModel": "gpt-4o-mini",
     "AiApiKey": "",
     "AiEndpoint": "",
-    "SteamApiKey": "",
     "MaxConversationHistory": 50
   }
 }
@@ -54,7 +54,6 @@ The bot reads settings from `appsettings.json` and supports [.NET User Secrets](
 | `AiModel` | The model/deployment name (e.g., `gpt-4o-mini`). |
 | `AiApiKey` | API key for OpenAI or Azure OpenAI. Not needed for Ollama. |
 | `AiEndpoint` | Required for Azure and Ollama (e.g., `http://localhost:11434/v1`). |
-| `SteamApiKey` | *(Optional)* Global Steam Web API key. |
 | `MaxConversationHistory` | Max messages retained per channel (default: `50`). |
 
 ### Using User Secrets (recommended for development)
@@ -63,7 +62,6 @@ The bot reads settings from `appsettings.json` and supports [.NET User Secrets](
 cd MonocoBot
 dotnet user-secrets set "Bot:DiscordToken" "your-discord-token"
 dotnet user-secrets set "Bot:AiApiKey" "your-api-key"
-dotnet user-secrets set "Bot:SteamApiKey" "your-steam-key"
 ```
 
 ## Building & Running
@@ -196,12 +194,11 @@ MonocoBot/
 │   ├── CodeRunnerTools.cs       # Roslyn-based C# code execution
 │   ├── DateTimeTools.cs         # Timezone queries and conversion
 │   ├── PdfTools.cs              # PDF document generation (QuestPDF)
-│   ├── SteamKeyStore.cs         # Per-user Steam API key persistence
-│   ├── SteamTools.cs            # Steam Web API integration
+│   ├── SteamTools.cs            # Steam Web API integration + local profile fallback + game deals
 │   ├── ToolOutput.cs            # Thread-safe file attachment pipeline
 │   └── WebSearchTools.cs        # DuckDuckGo search and web page reader
 ├── appsettings.json             # Default configuration
-├── steam_profiles.json          # Manual game data for private profiles
+├── steam_profiles.json          # Manual game/wishlist data for private profiles
 ├── Program.cs                   # Host builder, DI setup, AI provider selection
 └── MonocoBot.csproj             # Project file (.NET 10)
 ```

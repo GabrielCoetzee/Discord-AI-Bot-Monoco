@@ -8,6 +8,5 @@ public class BotOptions
     public string AiModel { get; set; } = "gpt-4o-mini";
     public string AiApiKey { get; set; } = "";
     public string AiEndpoint { get; set; } = "";
-    public string SteamApiKey { get; set; } = "";
     public int MaxConversationHistory { get; set; } = 50;
 }

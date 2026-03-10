@@ -31,8 +31,6 @@ builder.Services.AddSingleton(_ => new DiscordSocketClient(new DiscordSocketConf
     AlwaysDownloadUsers = true
 }));
 
-// AI chat client via Semantic Kernel
-// Supports: "openai", "azure" (Azure AI Foundry / Azure OpenAI), "ollama"
 builder.Services.AddSingleton<IChatClient>(sp =>
 {
     var opts = sp.GetRequiredService<IOptions<BotOptions>>().Value;
@@ -67,7 +65,6 @@ builder.Services.AddSingleton<IChatClient>(sp =>
         .Build();
 });
 
-builder.Services.AddSingleton<SteamKeyStore>();
 builder.Services.AddSingleton<PdfTools>();
 builder.Services.AddSingleton<CodeRunnerTools>();
 builder.Services.AddSingleton<WebSearchTools>();

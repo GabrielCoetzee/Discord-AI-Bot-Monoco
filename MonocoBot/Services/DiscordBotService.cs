@@ -41,14 +41,10 @@ public class DiscordBotService : IHostedService
             AIFunctionFactory.Create(codeRunnerTools.RunCSharpCode),
             AIFunctionFactory.Create(webSearchTools.SearchWeb),
             AIFunctionFactory.Create(webSearchTools.ReadWebPage),
-            AIFunctionFactory.Create(steamTools.GetSteamLibrary),
-            AIFunctionFactory.Create(steamTools.ResolveSteamVanityName),
-            AIFunctionFactory.Create(steamTools.GetSteamWishlist),
-            AIFunctionFactory.Create(steamTools.FindFriendByName),
-            AIFunctionFactory.Create(steamTools.GetFriendsList),
-            AIFunctionFactory.Create(steamTools.RegisterSteamApiKey),
-            AIFunctionFactory.Create(steamTools.UnregisterSteamApiKey),
-            AIFunctionFactory.Create(steamTools.GetPrivateProfileGames),
+            AIFunctionFactory.Create(steamTools.ResolveSteamId),
+            AIFunctionFactory.Create(steamTools.GetWishlist),
+            AIFunctionFactory.Create(steamTools.GetLocalProfileData),
+            AIFunctionFactory.Create(steamTools.LookupGameDeals),
             AIFunctionFactory.Create(dateTimeTools.GetCurrentDateTime),
             AIFunctionFactory.Create(dateTimeTools.ConvertTimezone),
         ];
@@ -113,12 +109,10 @@ public class DiscordBotService : IHostedService
 
         if (string.IsNullOrEmpty(content))
         {
-            await message.Channel.SendMessageAsync(
-                $"Hey! I'm **{_options.Name}** \U0001f916. Mention me with a message and I'll help you out!");
+            await message.Channel.SendMessageAsync($"Hey! I'm **{_options.Name}** \U0001f916. Mention me with a message and I'll help you out!");
             return;
         }
 
-        // Handle the "clear" command to reset conversation history
         if (content.Equals("clear", StringComparison.OrdinalIgnoreCase) ||
             content.Equals("reset", StringComparison.OrdinalIgnoreCase))
         {
@@ -237,14 +231,13 @@ public class DiscordBotService : IHostedService
         - **RunCSharpCode** — Execute C# code snippets and return results. Great for math, data processing, quick scripts.
         - **SearchWeb** — Search the web via DuckDuckGo.
         - **ReadWebPage** — Fetch and read the text content of any public URL.
-        - **GetSteamLibrary** — List a user's owned Steam games. Works for public profiles and for private profiles whose owners have registered their API key.
-        - **ResolveSteamVanityName** — Convert a Steam vanity URL name to a numeric Steam ID.
-        - **GetSteamWishlist** — List a user's Steam wishlist. Works for public wishlists and for private wishlists whose owners have registered their API key.
-        - **FindFriendByName** — Search a user's friend list by display name. Works for public and registered-private friend lists.
-        - **GetFriendsList** — List all friends on a user's friend list. Works for public and registered-private friend lists.
-        - **RegisterSteamApiKey** — Register a user's personal Steam API key so the bot can access their private profile. ALWAYS tell users to DM the bot with their key, never post it in a public channel.
-        - **UnregisterSteamApiKey** — Remove a previously registered Steam API key.
-        - **GetPrivateProfileGames** — Fallback: look up manually-provided game data from steam_profiles.json.
+        - **ResolveSteamId** — Resolve a Steam vanity name, profile URL, or raw ID to a numeric 64-bit Steam ID. Always call this first when a user gives you a profile name or URL.
+        - **GetProfileInfo** — Get a Steam user's public profile info: display name, online status, and currently playing game.
+        - **GetRecentlyPlayedGames** — See what a user has been playing in the last 2 weeks. Only works for public profiles.
+        - **GetOwnedGames** — List all games a user owns with total playtime. Only works for public profiles.
+        - **GetWishlist** — List all games on a user's public Steam wishlist.
+        - **GetLocalProfileData** — Look up game, wishlist, and recently played data from the local steam_profiles.json file. Use this as a fallback when Steam data is private.
+        - **LookupGameDeals** — Search for current prices and deals for a specific game across stores (powered by CheapShark).
         - **GetCurrentDateTime** — Get the current date and time in any timezone.
         - **ConvertTimezone** — Convert times between timezones.
 
@@ -252,7 +245,9 @@ public class DiscordBotService : IHostedService
         - Be friendly, concise, and helpful.
         - Use Discord markdown formatting (bold, italic, code blocks, lists).
         - When asked to create documents, use the CreatePdf tool.
-        - For Steam lookups: if a user mentions a friend by name, ask for the user's own Steam profile name first (if you don't already know it), resolve it with ResolveSteamVanityName, then use FindFriendByName to find the friend, and finally use GetSteamLibrary/GetSteamWishlist with the friend's ID. If a profile is private, suggest RegisterSteamApiKey and tell them to DM the key. Use GetPrivateProfileGames only as a last resort.
+        - For Steam lookups: if a user provides a Steam profile URL with a numeric ID, use ResolveSteamId to extract it, then GetWishlist. If data can't be fetched (private profile, vanity URL, etc.), ALWAYS try GetLocalProfileData as a fallback before giving up. If the local file also has no data, simply tell the user you don't have that information.
+        - When a user asks about game prices, deals, or sales, use LookupGameDeals. You can also combine it with wishlist data — for example, get a user's wishlist then look up deals for individual games.
+        - If a user asks you to sort or order results (e.g. by playtime, alphabetically, by price), do so in your response.
         - Keep text replies under 2000 characters when possible.
         - The [username] prefix in user messages tells you who is speaking.
         - Users can say "clear" or "reset" to clear conversation history.
