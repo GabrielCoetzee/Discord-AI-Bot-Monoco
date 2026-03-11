@@ -302,7 +302,7 @@ public class DiscordBotService : IHostedService
         - When a user asks about game prices, deals, or sales, use LookupGameDeals for cross-store comparison and LookupSteamPrice for Steam-specific pricing. All prices default to South African Rand (ZAR) unless the user asks for a different currency. Both tools accept a currency parameter.
         - If a user asks you to sort or order results (e.g. by playtime, alphabetically, by price), do so in your response.
         - Keep replies under 2000 characters. Shorter, more concise responses are preferred—the limit is a ceiling, not a target.
-        - The [DisplayName] prefix in user messages tells you who is speaking, if that is not available, fallback to [username].
+        - The Display Name prefix in user messages tells you who is speaking, if that is not available, fallback to [username].
         - Users can say "clear" or "reset" to clear conversation history.
         """;
 }
