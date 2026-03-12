@@ -9,11 +9,12 @@ Mention the bot or DM it and it will respond with context-aware, multi-turn conv
 - **Multi-provider AI** — Supports OpenAI, Azure OpenAI (Azure AI Foundry), and local Ollama models.
 - **Conversational memory** — Maintains per-channel conversation history with configurable limits. Say `clear` or `reset` to start fresh.
 - **Steam integration** — Look up public Steam profiles, game libraries, wishlists, and recently played games via the Steam Web API. For private profiles, a local `steam_profiles.json` fallback provides manually-configured data.
-- **Game deal lookups** — Search for current prices and deals for any game across stores (powered by CheapShark).
+- **Game deal lookups** — Search for current prices and deals for any game across stores (powered by IsThereAnyDeal).
 - **PDF generation** — Create formatted PDF documents (headings, bullet lists, paragraphs) using QuestPDF. Files are automatically attached to the reply.
 - **C# code execution** — Run C# snippets in a sandboxed Roslyn scripting environment with a 30-second timeout.
 - **Web search & page reading** — Search the web via DuckDuckGo and fetch the text content of any public URL.
 - **Date/time utilities** — Get the current time in any timezone or convert between timezones.
+- **Weather tools** — Get current weather conditions and short forecasts for locations worldwide.
 - **Long message handling** — Automatically splits responses that exceed Discord's 2000-character limit.
 
 ## Prerequisites
@@ -25,6 +26,7 @@ Mention the bot or DM it and it will respond with context-aware, multi-turn conv
   - [Azure OpenAI](https://learn.microsoft.com/azure/ai-services/openai/) endpoint + key
   - A running [Ollama](https://ollama.com/) instance (no key required)
 - *(Optional)* Steam profile URLs for wishlist lookups (must be public)
+- *(Optional)* An [IsThereAnyDeal API key](https://isthereanydeal.com/) for cross-store game deal lookups
 
 ## Configuration
 
@@ -37,12 +39,14 @@ The bot reads settings from `appsettings.json` and supports [.NET User Secrets](
   "Bot": {
     "Name": "Monoco",
     "DiscordToken": "",
-    "AiProvider": "openai",
+    "AiProvider": "azure",
     "AiModel": "gpt-4o-mini",
     "AiApiKey": "",
     "AiEndpoint": "",
+    "AiTemperature": 0.7,
     "HealthPort": 8080,
-    "MaxConversationHistory": 50
+    "MaxConversationHistory": 50,
+    "IsThereAnyDealApiKey": ""
   }
 }
 ```
@@ -55,8 +59,10 @@ The bot reads settings from `appsettings.json` and supports [.NET User Secrets](
 | `AiModel` | The model/deployment name (e.g., `gpt-4o-mini`). |
 | `AiApiKey` | API key for OpenAI or Azure OpenAI. Not needed for Ollama. |
 | `AiEndpoint` | Required for Azure and Ollama (e.g., `http://localhost:11434/v1`). |
+| `AiTemperature` | Optional model temperature used for chat completions (example: `0.7`). |
 | `HealthPort` | Port for the `/health` endpoint (default: `8080`). |
 | `MaxConversationHistory` | Max messages retained per channel (default: `50`). |
+| `IsThereAnyDealApiKey` | Optional API key used for cross-store game deal lookups. |
 
 ### Using User Secrets (recommended for development)
 
@@ -64,6 +70,8 @@ The bot reads settings from `appsettings.json` and supports [.NET User Secrets](
 cd MonocoBot
 dotnet user-secrets set "Bot:DiscordToken" "your-discord-token"
 dotnet user-secrets set "Bot:AiApiKey" "your-api-key"
+dotnet user-secrets set "Bot:AiEndpoint" "https://your-azure-openai-endpoint.openai.azure.com/"
+dotnet user-secrets set "Bot:IsThereAnyDealApiKey" "your-itad-api-key"
 ```
 
 ## Building & Running
@@ -131,8 +139,9 @@ Attach a debugger to the running process if needed, or add `Debugger.Launch()` t
    Restart=always
    RestartSec=10
    Environment=Bot__DiscordToken=your-token
-   Environment=Bot__AiApiKey=your-key
-   Environment=Bot__AiProvider=openai
+    Environment=Bot__AiApiKey=your-key
+    Environment=Bot__AiProvider=azure
+    Environment=Bot__AiEndpoint=https://your-azure-openai-endpoint.openai.azure.com/
 
    [Install]
    WantedBy=multi-user.target
@@ -168,8 +177,9 @@ docker build -t monocobot .
 docker run -d --name monocobot \
   -e Bot__DiscordToken=your-token \
   -e Bot__AiApiKey=your-key \
-  -e Bot__AiProvider=openai \
+  -e Bot__AiProvider=azure \
   -e Bot__AiModel=gpt-4o-mini \
+  -e Bot__AiEndpoint=https://your-azure-openai-endpoint.openai.azure.com/ \
   monocobot
 ```
 
@@ -198,6 +208,7 @@ MonocoBot/
 │   ├── PdfTools.cs              # PDF document generation (QuestPDF)
 │   ├── SteamTools.cs            # Steam Web API integration + local profile fallback + game deals
 │   ├── ToolOutput.cs            # Thread-safe file attachment pipeline
+│   ├── WeatherTools.cs          # Current weather and forecast lookup tools
 │   └── WebSearchTools.cs        # DuckDuckGo search and web page reader
 ├── appsettings.json             # Default configuration
 ├── steam_profiles.json          # Manual game/wishlist data for private profiles
