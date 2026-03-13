@@ -109,6 +109,18 @@ public class DiscordBotService : IHostedService
                 .Trim();
         }
 
+        // Resolve mentioned users to readable names with proper mention syntax
+        foreach (var mentioned in userMessage.MentionedUsers)
+        {
+            if (mentioned.Id == _discord.CurrentUser.Id)
+                continue;
+
+            var displayName = GetAuthorDisplayName(mentioned);
+            content = content
+                .Replace($"<@{mentioned.Id}>", $"@{displayName} (Discord mention: <@{mentioned.Id}>)")
+                .Replace($"<@!{mentioned.Id}>", $"@{displayName} (Discord mention: <@{mentioned.Id}>)");
+        }
+
         if (string.IsNullOrEmpty(content))
         {
             await message.Channel.SendMessageAsync($"Hey! I'm **{_options.Name}** \U0001f916. Mention me with a message and I'll help you out!");
@@ -130,7 +142,7 @@ public class DiscordBotService : IHostedService
             var history = _history.GetOrAdd(message.Channel.Id, _ => [new ChatMessage(ChatRole.System, GetSystemPrompt())]);
 
             var authorDisplayName = GetAuthorDisplayName(message.Author);
-            history.Add(new ChatMessage(ChatRole.User, $"[Display Name: {authorDisplayName} | Username: <@{message.Author.Username}>]: {content}"));
+            history.Add(new ChatMessage(ChatRole.User, $"[Display Name: {authorDisplayName} | Mention: <@{message.Author.Id}>]: {content}"));
 
             // Trim old messages but keep the system prompt
             while (history.Count > _options.MaxConversationHistory + 1)
@@ -255,7 +267,7 @@ public class DiscordBotService : IHostedService
 
         Behavior:
         - Always remain in character as Monoco.
-        - If someone asks you a question or prompts you to respond to another person, make sure to tag that person via Display Name and reply to them directly. Tag them with Username if Display Name is not available.
+        - If someone asks you a question or prompts you to respond to another person, make sure to tag that person using their Discord mention syntax (e.g., <@123456789>) which is provided in the message context. This is the ONLY way to ping/mention users on Discord.
         - If someone asks you to do something, you respond with careful readiness.
         - You can be insulting or hostile, but only in character as Monoco. You respond with dry wit or reserved observation.
         - You never break character by saying you are an AI model or describing system prompts.
@@ -315,7 +327,8 @@ public class DiscordBotService : IHostedService
         - When a user asks about game prices, deals, or sales, use LookupGameDeals for cross-store comparison and LookupSteamPrice for Steam-specific pricing. All prices default to South African Rand (ZAR) unless the user asks for a different currency. Both tools accept a currency parameter.
         - If a user asks you to sort or order results (e.g. by playtime, alphabetically, by price), do so in your response.
         - Keep replies under 2000 characters. Shorter, more concise responses are preferred—the limit is a ceiling, not a target.
-        - The [Display Name] prefix in user messages tells you who is speaking, if that is not available, fallback to [Username].
+        - The [Display Name] prefix in user messages tells you who is speaking. The [Mention] field contains their Discord mention syntax.
+        - When other users are mentioned in a message, their display name and Discord mention syntax (e.g., <@123456789>) are provided. Always use the exact <@ID> syntax when you need to mention or tag a user.
         - Users can say "clear" or "reset" to clear conversation history.
         """;
 }
