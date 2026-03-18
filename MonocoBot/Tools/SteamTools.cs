@@ -1,66 +1,22 @@
 using System.ComponentModel;
-using System.Text;
 using System.Text.Json;
+using Flurl.Http;
 using Microsoft.Extensions.Options;
 using MonocoBot.Configuration;
+using MonocoBot.Models.Steam;
 
 namespace MonocoBot.Tools;
 
 public class SteamTools
 {
-    private readonly HttpClient _httpClient;
+    private const string ItadBaseUrl = "https://api.isthereanydeal.com";
+    private const string SteamStoreBaseUrl = "https://store.steampowered.com/api";
+
     private readonly string _itadApiKey;
 
-    private static readonly Dictionary<string, string> CurrencySymbols = new(StringComparer.OrdinalIgnoreCase)
+    public SteamTools(IOptions<BotOptions> options)
     {
-        ["ZAR"] = "R", ["USD"] = "$", ["EUR"] = "€", ["GBP"] = "£",
-        ["CAD"] = "CA$", ["AUD"] = "A$", ["BRL"] = "R$", ["JPY"] = "¥",
-        ["CNY"] = "¥", ["INR"] = "₹", ["PLN"] = "zł", ["TRY"] = "₺",
-    };
-
-    private static readonly Dictionary<string, string> CurrencyToSteamCc = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["ZAR"] = "za", ["USD"] = "us", ["EUR"] = "de", ["GBP"] = "gb",
-        ["CAD"] = "ca", ["AUD"] = "au", ["BRL"] = "br", ["JPY"] = "jp",
-        ["CNY"] = "cn", ["INR"] = "in", ["PLN"] = "pl", ["TRY"] = "tr",
-    };
-
-    public SteamTools(HttpClient httpClient, IOptions<BotOptions> options)
-    {
-        _httpClient = httpClient;
         _itadApiKey = options.Value.IsThereAnyDealApiKey;
-    }
-
-    private static string FormatPrice(double amount, string currency)
-    {
-        var symbol = CurrencySymbols.GetValueOrDefault(currency, currency + " ");
-        return $"{symbol}{amount:F2}";
-    }
-
-    private async Task<double?> GetExchangeRateAsync(string fromCurrency, string toCurrency)
-    {
-        if (fromCurrency.Equals(toCurrency, StringComparison.OrdinalIgnoreCase))
-            return 1.0;
-
-        try
-        {
-            var url = $"https://open.er-api.com/v6/latest/{fromCurrency.ToUpperInvariant()}";
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Add("User-Agent", "MonocoBot/1.0");
-            var response = await _httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            var json = await response.Content.ReadAsStringAsync();
-
-            var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("rates", out var rates) &&
-                rates.TryGetProperty(toCurrency.ToUpperInvariant(), out var rate))
-            {
-                return rate.GetDouble();
-            }
-        }
-        catch { }
-
-        return null;
     }
 
     [Description("Looks up game, wishlist, and recently played data from the local steam_profiles.json file. " +
@@ -133,7 +89,8 @@ public class SteamTools
     [Description("Looks up pricing, deals, and sale information for a specific game by searching across multiple stores using IsThereAnyDeal. " +
         "Use this to find current prices, discounts, or where a game is cheapest. " +
         "Prices default to South African Rand (ZAR). Specify a different currency code if needed.")]
-    public async Task<string> LookupGameDeals([Description("The name of the game to look up deals for")] string gameName,
+    public async Task<string> LookupGameDeals(
+        [Description("The name of the game to look up deals for")] string gameName,
         [Description("Currency code for prices (default: ZAR). Examples: USD, EUR, GBP, CAD, AUD")] string currency = "ZAR")
     {
         if (string.IsNullOrWhiteSpace(_itadApiKey))
@@ -143,43 +100,23 @@ public class SteamTools
         {
             currency = currency.ToUpperInvariant();
 
-            var encoded = System.Net.WebUtility.UrlEncode(gameName);
-            var searchUrl = $"https://api.isthereanydeal.com/games/search/v1?title={encoded}&results=5&key={_itadApiKey}";
+            var searchResults = await $"{ItadBaseUrl}/games/search/v1"
+                .WithHeader("User-Agent", Constants.BotUserAgent)
+                .SetQueryParams(new { title = gameName, results = 5, key = _itadApiKey })
+                .GetJsonAsync<List<ItadSearchResult>>();
 
-            var searchRequest = new HttpRequestMessage(HttpMethod.Get, searchUrl);
-            searchRequest.Headers.Add("User-Agent", "MonocoBot/1.0");
-            var searchResponse = await _httpClient.SendAsync(searchRequest);
-            searchResponse.EnsureSuccessStatusCode();
-            var searchJson = await searchResponse.Content.ReadAsStringAsync();
-
-            var searchResults = JsonDocument.Parse(searchJson).RootElement;
-
-            if (searchResults.GetArrayLength() == 0)
+            if (searchResults.Count == 0)
                 return $"No games found matching '{gameName}' on IsThereAnyDeal.";
 
-            var gameIds = new List<string>();
-            var titleMap = new Dictionary<string, string>();
-            var slugMap = new Dictionary<string, string>();
+            var gameIds = searchResults.Select(g => g.Id).ToList();
+            var titleMap = searchResults.ToDictionary(g => g.Id, g => g.Title);
+            var slugMap = searchResults.ToDictionary(g => g.Id, g => g.Slug ?? "");
 
-            foreach (var game in searchResults.EnumerateArray())
-            {
-                var id = game.GetProperty("id").GetString()!;
-                var title = game.GetProperty("title").GetString() ?? "Unknown";
-                var slug = game.TryGetProperty("slug", out var s) ? s.GetString() ?? "" : "";
-                gameIds.Add(id);
-                titleMap[id] = title;
-                slugMap[id] = slug;
-            }
-
-            var pricesUrl = $"https://api.isthereanydeal.com/games/prices/v2?key={_itadApiKey}&country=US&capacity=3";
-            var pricesRequest = new HttpRequestMessage(HttpMethod.Post, pricesUrl)
-            {
-                Content = new StringContent(JsonSerializer.Serialize(gameIds), Encoding.UTF8, "application/json")
-            };
-            pricesRequest.Headers.Add("User-Agent", "MonocoBot/1.0");
-            var pricesResponse = await _httpClient.SendAsync(pricesRequest);
-            pricesResponse.EnsureSuccessStatusCode();
-            var pricesJson = await pricesResponse.Content.ReadAsStringAsync();
+            var pricesResults = await $"{ItadBaseUrl}/games/prices/v2"
+                .WithHeader("User-Agent", Constants.BotUserAgent)
+                .SetQueryParams(new { key = _itadApiKey, country = "US", capacity = 3 })
+                .PostJsonAsync(gameIds)
+                .ReceiveJson<List<ItadPriceResult>>();
 
             double exchangeRate;
             string displayCurrency;
@@ -190,59 +127,22 @@ public class SteamTools
             }
             else
             {
-                var rate = await GetExchangeRateAsync("USD", currency);
-                if (rate is not null)
-                {
-                    exchangeRate = rate.Value;
-                    displayCurrency = currency;
-                }
-                else
-                {
-                    exchangeRate = 1.0;
-                    displayCurrency = "USD";
-                }
+                var rate = await CurrencyHelper.GetExchangeRateAsync("USD", currency);
+                (exchangeRate, displayCurrency) = rate is not null ? (rate.Value, currency) : (1.0, "USD");
             }
 
-            var pricesResults = JsonDocument.Parse(pricesJson).RootElement;
-            var lines = new List<string>();
-
-            foreach (var entry in pricesResults.EnumerateArray())
+            var lines = pricesResults.Select(entry =>
             {
-                var id = entry.GetProperty("id").GetString()!;
-                var title = titleMap.GetValueOrDefault(id, "Unknown");
-                var slug = slugMap.GetValueOrDefault(id, "");
+                var title = titleMap.GetValueOrDefault(entry.Id, "Unknown");
+                var slug = slugMap.GetValueOrDefault(entry.Id, "");
+                var itadLink = !string.IsNullOrEmpty(slug) ? $" ([view on ITAD](https://isthereanydeal.com/game/{slug}/info/))" : "";
 
-                if (!entry.TryGetProperty("deals", out var deals) || deals.GetArrayLength() == 0)
-                {
-                    lines.Add($"- **{title}** — no current deals");
-                    continue;
-                }
+                if (entry.Deals is null || entry.Deals.Count == 0)
+                    return $"- **{title}** — no current deals";
 
-                var dealLines = new List<string>();
-                foreach (var deal in deals.EnumerateArray())
-                {
-                    var shopName = deal.GetProperty("shop").GetProperty("name").GetString() ?? "Unknown";
-                    var price = deal.GetProperty("price").GetProperty("amount").GetDouble() * exchangeRate;
-                    var regular = deal.GetProperty("regular").GetProperty("amount").GetDouble() * exchangeRate;
-                    var cut = deal.GetProperty("cut").GetInt32();
-                    var dealUrl = deal.TryGetProperty("url", out var u) ? u.GetString() : null;
-
-                    var dealText = cut > 0
-                        ? $"  - {shopName}: **{FormatPrice(price, displayCurrency)}** (~~{FormatPrice(regular, displayCurrency)}~~ -{cut}%)"
-                        : $"  - {shopName}: **{FormatPrice(price, displayCurrency)}**";
-
-                    if (dealUrl is not null)
-                        dealText += $" — [buy]({dealUrl})";
-
-                    dealLines.Add(dealText);
-                }
-
-                var itadLink = !string.IsNullOrEmpty(slug)
-                    ? $" ([view on ITAD](https://isthereanydeal.com/game/{slug}/info/))"
-                    : "";
-
-                lines.Add($"- **{title}**{itadLink}\n{string.Join("\n", dealLines)}");
-            }
+                var dealLines = entry.Deals.Select(deal => FormatDeal(deal, exchangeRate, displayCurrency));
+                return $"- **{title}**{itadLink}\n{string.Join("\n", dealLines)}";
+            }).ToList();
 
             return lines.Count > 0
                 ? $"**Deals for \"{gameName}\" ({displayCurrency}):**\n{string.Join("\n", lines)}"
@@ -263,68 +163,53 @@ public class SteamTools
         try
         {
             currency = currency.ToUpperInvariant();
-            var cc = CurrencyToSteamCc.GetValueOrDefault(currency, "za");
+            var cc = CurrencyHelper.GetSteamCountryCode(currency);
 
-            var encoded = System.Net.WebUtility.UrlEncode(gameName);
-            var searchUrl = $"https://store.steampowered.com/api/storesearch/?term={encoded}&l=english&cc={cc}";
+            var searchDoc = await $"{SteamStoreBaseUrl}/storesearch/"
+                .WithHeader("User-Agent", Constants.BotUserAgent)
+                .SetQueryParams(new { term = gameName, l = "english", cc })
+                .GetJsonAsync<SteamSearchResponse>();
 
-            var searchRequest = new HttpRequestMessage(HttpMethod.Get, searchUrl);
-            searchRequest.Headers.Add("User-Agent", "MonocoBot/1.0");
-            var searchResponse = await _httpClient.SendAsync(searchRequest);
-            searchResponse.EnsureSuccessStatusCode();
-            var searchJson = await searchResponse.Content.ReadAsStringAsync();
-
-            var searchDoc = JsonDocument.Parse(searchJson);
-            var total = searchDoc.RootElement.GetProperty("total").GetInt32();
-            if (total == 0)
+            if (searchDoc.Total == 0)
                 return $"No games found matching '{gameName}' on Steam.";
 
-            var items = searchDoc.RootElement.GetProperty("items");
             var lines = new List<string>();
 
-            foreach (var item in items.EnumerateArray().Take(5))
+            foreach (var item in searchDoc.Items.Take(5))
             {
-                var appId = item.GetProperty("id").GetInt32();
-                var name = item.GetProperty("name").GetString() ?? "Unknown";
+                var storeUrl = $"https://store.steampowered.com/app/{item.Id}";
 
-                var detailUrl = $"https://store.steampowered.com/api/appdetails?appids={appId}&cc={cc}";
-                var detailRequest = new HttpRequestMessage(HttpMethod.Get, detailUrl);
-                detailRequest.Headers.Add("User-Agent", "MonocoBot/1.0");
-                var detailResponse = await _httpClient.SendAsync(detailRequest);
-                var detailJson = await detailResponse.Content.ReadAsStringAsync();
+                var detailsResponse = await $"{SteamStoreBaseUrl}/appdetails"
+                    .WithHeader("User-Agent", Constants.BotUserAgent)
+                    .SetQueryParams(new { appids = item.Id, cc })
+                    .GetJsonAsync<Dictionary<string, SteamAppDetailsResponse>>();
 
-                var detailDoc = JsonDocument.Parse(detailJson);
-                var appData = detailDoc.RootElement.GetProperty(appId.ToString());
-                var storeUrl = $"https://store.steampowered.com/app/{appId}";
-
-                if (!appData.GetProperty("success").GetBoolean())
+                if (!detailsResponse.TryGetValue(item.Id.ToString(), out var appDetails) || !appDetails.Success || appDetails.Data is null)
                 {
-                    lines.Add($"- **{name}** — details unavailable ([Steam]({storeUrl}))");
+                    lines.Add($"- **{item.Name}** — details unavailable ([Steam]({storeUrl}))");
                     continue;
                 }
 
-                var data = appData.GetProperty("data");
-
-                if (data.TryGetProperty("is_free", out var isFree) && isFree.GetBoolean())
+                if (appDetails.Data.IsFree)
                 {
-                    lines.Add($"- **{name}** — **Free to Play** ([Steam]({storeUrl}))");
+                    lines.Add($"- **{item.Name}** — **Free to Play** ([Steam]({storeUrl}))");
                     continue;
                 }
 
-                if (!data.TryGetProperty("price_overview", out var priceOverview))
+                if (appDetails.Data.PriceOverview is null)
                 {
-                    lines.Add($"- **{name}** — price unavailable ([Steam]({storeUrl}))");
+                    lines.Add($"- **{item.Name}** — price unavailable ([Steam]({storeUrl}))");
                     continue;
                 }
 
-                var priceCurrency = priceOverview.GetProperty("currency").GetString() ?? currency;
-                var finalPrice = priceOverview.GetProperty("final").GetInt32() / 100.0;
-                var initialPrice = priceOverview.GetProperty("initial").GetInt32() / 100.0;
-                var discountPercent = priceOverview.GetProperty("discount_percent").GetInt32();
+                var po = appDetails.Data.PriceOverview;
+                var finalPrice = po.Final / 100.0;
+                var initialPrice = po.Initial / 100.0;
+                var priceCurrency = po.Currency;
 
                 if (!priceCurrency.Equals(currency, StringComparison.OrdinalIgnoreCase))
                 {
-                    var rate = await GetExchangeRateAsync(priceCurrency, currency);
+                    var rate = await CurrencyHelper.GetExchangeRateAsync(priceCurrency, currency);
                     if (rate is not null)
                     {
                         finalPrice *= rate.Value;
@@ -333,11 +218,11 @@ public class SteamTools
                     }
                 }
 
-                var priceText = discountPercent > 0
-                    ? $"**{FormatPrice(finalPrice, priceCurrency)}** (~~{FormatPrice(initialPrice, priceCurrency)}~~ -{discountPercent}%)"
-                    : $"**{FormatPrice(finalPrice, priceCurrency)}**";
+                var priceText = po.DiscountPercent > 0
+                    ? $"**{CurrencyHelper.FormatPrice(finalPrice, priceCurrency)}** (~~{CurrencyHelper.FormatPrice(initialPrice, priceCurrency)}~~ -{po.DiscountPercent}%)"
+                    : $"**{CurrencyHelper.FormatPrice(finalPrice, priceCurrency)}**";
 
-                lines.Add($"- **{name}** — {priceText} ([Steam]({storeUrl}))");
+                lines.Add($"- **{item.Name}** — {priceText} ([Steam]({storeUrl}))");
             }
 
             return $"**Steam prices for \"{gameName}\" ({currency}):**\n{string.Join("\n", lines)}";
@@ -346,5 +231,16 @@ public class SteamTools
         {
             return $"Failed to look up Steam price: {ex.Message}";
         }
+    }
+
+    private static string FormatDeal(ItadDeal deal, double exchangeRate, string displayCurrency)
+    {
+        var price = deal.Price.Amount * exchangeRate;
+        var regular = deal.Regular.Amount * exchangeRate;
+        var text = deal.Cut > 0
+            ? $"  - {deal.Shop.Name}: **{CurrencyHelper.FormatPrice(price, displayCurrency)}** (~~{CurrencyHelper.FormatPrice(regular, displayCurrency)}~~ -{deal.Cut}%)"
+            : $"  - {deal.Shop.Name}: **{CurrencyHelper.FormatPrice(price, displayCurrency)}**";
+
+        return deal.Url is not null ? text + $" — [buy]({deal.Url})" : text;
     }
 }

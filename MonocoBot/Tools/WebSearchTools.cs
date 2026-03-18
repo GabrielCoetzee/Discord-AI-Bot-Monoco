@@ -1,36 +1,27 @@
 using System.ComponentModel;
 using System.Net;
 using System.Text.RegularExpressions;
+using Flurl.Http;
 using HtmlAgilityPack;
 
 namespace MonocoBot.Tools;
 
 public class WebSearchTools
 {
-    private readonly HttpClient _httpClient;
-
-    public WebSearchTools(HttpClient httpClient)
-    {
-        _httpClient = httpClient;
-    }
+    private const string DuckDuckGoUrl = "https://html.duckduckgo.com/html/";
 
     [Description("Searches the web and returns top results with titles, URLs, and descriptions.")]
     public async Task<string> SearchWeb([Description("The search query")] string query)
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Post, "https://html.duckduckgo.com/html/")
-            {
-                Content = new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("q", query) })
-            };
-            request.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
-            request.Headers.Add("Accept", "text/html");
-            request.Headers.Add("Accept-Language", "en-US,en;q=0.9");
-            request.Headers.Add("Referer", "https://html.duckduckgo.com/");
-
-            var response = await _httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            var html = await response.Content.ReadAsStringAsync();
+            var html = await DuckDuckGoUrl
+                .WithHeader("User-Agent", Constants.BrowserUserAgent)
+                .WithHeader("Accept", "text/html")
+                .WithHeader("Accept-Language", "en-US,en;q=0.9")
+                .WithHeader("Referer", "https://html.duckduckgo.com/")
+                .PostUrlEncodedAsync(new { q = query })
+                .ReceiveString();
 
             var doc = new HtmlDocument();
             doc.LoadHtml(html);
@@ -78,46 +69,15 @@ public class WebSearchTools
         }
     }
 
-    private static string? ExtractDdgUrl(string href)
-    {
-        if (string.IsNullOrEmpty(href))
-            return null;
-
-        // DDG redirect links: //duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com&rut=...
-        if (href.Contains("uddg="))
-        {
-            try
-            {
-                var fullUrl = href.StartsWith("//") ? "https:" + href : href;
-                var uri = new Uri(fullUrl);
-                foreach (var param in uri.Query.TrimStart('?').Split('&'))
-                {
-                    var parts = param.Split('=', 2);
-                    if (parts.Length == 2 && parts[0] == "uddg")
-                        return WebUtility.UrlDecode(parts[1]);
-                }
-            }
-            catch { }
-        }
-
-        if (href.StartsWith("http"))
-            return href;
-
-        return null;
-    }
-
     [Description("Fetches and extracts the text content of a web page at the given URL. " +
         "Useful for reading articles, documentation, or any public web content.")]
     public async Task<string> ReadWebPage([Description("The full URL of the web page to read (e.g., 'https://example.com')")] string url)
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-
-            var response = await _httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
-            var html = await response.Content.ReadAsStringAsync();
+            var html = await url
+                .WithHeader("User-Agent", Constants.BrowserUserAgent)
+                .GetStringAsync();
 
             var doc = new HtmlDocument();
             doc.LoadHtml(html);
@@ -140,5 +100,32 @@ public class WebSearchTools
         {
             return $"Failed to read web page: {ex.Message}";
         }
+    }
+
+    private static string? ExtractDdgUrl(string href)
+    {
+        if (string.IsNullOrEmpty(href))
+            return null;
+
+        if (href.Contains("uddg="))
+        {
+            try
+            {
+                var fullUrl = href.StartsWith("//") ? "https:" + href : href;
+                var uri = new Uri(fullUrl);
+                foreach (var param in uri.Query.TrimStart('?').Split('&'))
+                {
+                    var parts = param.Split('=', 2);
+                    if (parts.Length == 2 && parts[0] == "uddg")
+                        return WebUtility.UrlDecode(parts[1]);
+                }
+            }
+            catch { }
+        }
+
+        if (href.StartsWith("http"))
+            return href;
+
+        return null;
     }
 }
